@@ -7,8 +7,4 @@ dependencies and instructions.
 
 ## Tools
 
-_None yet._
-
-## License
-
-[MIT](LICENSE)
+- [note-triage](note-triage/) — Textual TUI for triaging markdown notes (keep / trash).
