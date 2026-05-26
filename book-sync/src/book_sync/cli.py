@@ -11,8 +11,9 @@ import typer
 from . import awards as awards_mod
 from . import clippings as clippings_mod
 from . import goodreads as goodreads_mod
+from . import coalesce as coalesce_mod
 from .config import Config, load_config
-from .notes import load_index, plan_renames
+from .notes import load_index, new_note_path, plan_renames, write_note
 from .sync import upsert
 
 app = typer.Typer(
@@ -135,6 +136,46 @@ def rename(
             old.rename(new)
     prefix = "[dry-run] would rename" if dry_run else "renamed"
     typer.echo(f"{prefix} {len(plans)} of {len(idx.notes)} notes")
+
+
+@app.command("coalesce")
+def coalesce(
+    config: ConfigOpt = Path("config.toml"),
+    dry_run: DryRunOpt = False,
+    threshold: Annotated[float, typer.Option(help="Min match score to merge (0-100).")] = coalesce_mod.MERGE_THRESHOLD,
+) -> None:
+    """Fold freeform (no-frontmatter) notes into imported notes, formatting and de-duping."""
+    cfg = _load(config)
+    idx = load_index(cfg.books_path)
+    merges = standalones = 0
+
+    for free in coalesce_mod.freeform_notes(cfg.books_path):
+        match, score = coalesce_mod.best_match(idx, free.title)
+
+        if match is not None and score >= threshold:
+            merges += 1
+            title, author = match.get("title"), match.get("author") or ""
+            typer.echo(f"  MERGE  {free.path.name}  ->  {match.path.name}  (score {score:.0f})")
+            if dry_run:
+                continue
+            post = coalesce_mod.build_merged_post(free.path, match)
+            write_note(free.path, post)
+            match.path.unlink()
+            target = new_note_path(cfg.books_path, title, author, {free.path})
+            free.path.rename(target)
+        else:
+            standalones += 1
+            cand = f"  (best: {match.get('title')!r} {score:.0f})" if match else ""
+            typer.echo(f"  STAND  {free.path.name}{cand}")
+            if dry_run:
+                continue
+            post = coalesce_mod.build_standalone_post(free.path, free, cfg.clipping_default_status)
+            write_note(free.path, post)
+            target = new_note_path(cfg.books_path, free.title, free.author, {free.path})
+            free.path.rename(target)
+
+    prefix = "[dry-run] would " if dry_run else ""
+    typer.echo(f"{prefix}merge {merges}, format-only {standalones}")
 
 
 @app.command("status")
