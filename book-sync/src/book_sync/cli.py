@@ -12,7 +12,7 @@ from . import awards as awards_mod
 from . import clippings as clippings_mod
 from . import goodreads as goodreads_mod
 from .config import Config, load_config
-from .notes import load_index
+from .notes import load_index, plan_renames
 from .sync import upsert
 
 app = typer.Typer(
@@ -118,6 +118,23 @@ def awards(
         for b in awards_mod.group_by_book(entries)
     ]
     _report(results, dry_run)
+
+
+@app.command("rename")
+def rename(
+    config: ConfigOpt = Path("config.toml"),
+    dry_run: DryRunOpt = False,
+) -> None:
+    """Rename book notes to 'Title (Series N) - Author'. Skips freeform notes."""
+    cfg = _load(config)
+    idx = load_index(cfg.books_path)
+    plans = plan_renames(idx.notes, cfg.books_path)
+    for old, new in plans:
+        typer.echo(f"  {old.name}  ->  {new.name}")
+        if not dry_run:
+            old.rename(new)
+    prefix = "[dry-run] would rename" if dry_run else "renamed"
+    typer.echo(f"{prefix} {len(plans)} of {len(idx.notes)} notes")
 
 
 @app.command("status")

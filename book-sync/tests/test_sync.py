@@ -13,20 +13,21 @@ def test_upsert_creates_then_fills_without_clobbering(tmp_path):
     r1 = upsert(idx, books, fields={"title": "2312", "author": "Kim Stanley Robinson",
                                     "status": "read", "rating": 4, "gr_id": "111"})
     assert r1.action == "create"
-    note = frontmatter.loads((books / "2312.md").read_text())
+    assert r1.path.name == "2312 - Kim Stanley Robinson.md"
+    note = frontmatter.loads(r1.path.read_text())
     assert note["status"] == "read" and note["rating"] == 4
 
     # a review becomes the note body and is reported as a change
     r_body = upsert(idx, books, fields={"title": "Reviewed", "author": "A"}, body="great")
     assert "body" in r_body.changed
-    assert frontmatter.loads((books / "reviewed.md").read_text()).content == "great"
+    assert frontmatter.loads(r_body.path.read_text()).content == "great"
 
     # re-running with a different status must NOT overwrite, but fills isbn
     idx2 = load_index(books)
     r2 = upsert(idx2, books, fields={"title": "2312", "author": "Kim Stanley Robinson",
                                      "status": "want", "isbn": "9780316098120", "gr_id": "111"})
     assert r2.action == "update"
-    note = frontmatter.loads((books / "2312.md").read_text())
+    note = frontmatter.loads(r1.path.read_text())
     assert note["status"] == "read"  # preserved (vault wins)
     assert note["isbn"] == "9780316098120"  # blank filled
 
@@ -35,10 +36,10 @@ def test_upsert_create_only_status(tmp_path):
     books = tmp_path / "books"
     idx = load_index(books)
     # clipping seeds default status only on creation
-    upsert(idx, books, fields={"title": "Powers", "author": "Ursula K. Le Guin",
-                               "clipping": "[[Powers - Ursula K. Le Guin]]"},
-           create_only={"status": "read"})
-    note = frontmatter.loads((books / "powers.md").read_text())
+    r = upsert(idx, books, fields={"title": "Powers", "author": "Ursula K. Le Guin",
+                                   "clipping": "[[Powers - Ursula K. Le Guin]]"},
+               create_only={"status": "read"})
+    note = frontmatter.loads(r.path.read_text())
     assert note["status"] == "read"
     assert note["clipping"] == "[[Powers - Ursula K. Le Guin]]"
 

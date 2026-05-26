@@ -8,6 +8,7 @@ has set (fill-only-if-empty), except list fields explicitly merged by union.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -41,8 +42,42 @@ def match_key(title: str, author: str) -> str:
     return f"{normalize_title(title)}|{author_surname(author)}"
 
 
-def slugify(title: str) -> str:
-    return re.sub(r"\s+", "-", normalize_title(title)) or "book"
+# Goodreads series tag, e.g. "(Imperial Radch, #1)" at the end of a title.
+_SERIES_RE = re.compile(r"\s*\(([^()]+?),\s*#(\d+)\)\s*$")
+# Characters Obsidian disallows in filenames or that break wikilinks.
+_ILLEGAL_RE = re.compile(r"[\\/:*?\"<>|#^\[\]]")
+
+
+def _parse_series(title: str) -> tuple[str | None, int | None, str]:
+    """Split a trailing '(Series, #N)' tag off a title -> (series, number, base)."""
+    m = _SERIES_RE.search(title)
+    if not m:
+        return None, None, title
+    return m.group(1).strip(), int(m.group(2)), title[: m.start()].rstrip()
+
+
+def _sanitize_filename(text: str) -> str:
+    text = _ILLEGAL_RE.sub("", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text.rstrip(". ")
+
+
+def book_filename(title: str, author: str = "", *, drop_subtitle: bool = True) -> str:
+    """Human-readable note filename: 'Title (Series N) - Author'.
+
+    A Goodreads series tag becomes '(Series N)' so same-titled volumes stay
+    distinct; author is appended. With ``drop_subtitle`` the part after the
+    first ':' is dropped for a cleaner name; without it the full title is kept
+    (':' -> ' -'), used to disambiguate books that collide once trimmed.
+    """
+    series, number, base = _parse_series(title)
+    base = base.split(":")[0] if drop_subtitle else base.replace(":", " -")
+    name = _sanitize_filename(base)
+    if series and number is not None:
+        name = f"{name} ({_sanitize_filename(series)} {number})"
+    if author and (clean_author := _sanitize_filename(author)):
+        name = f"{name} - {clean_author}"
+    return name or "book"
 
 
 @dataclass
@@ -145,22 +180,53 @@ def merge_fields(meta: dict, new: dict, *, union_keys: tuple[str, ...] = ()) -> 
     return changed
 
 
-def new_note_path(books_path: Path, title: str, author: str, taken: set[Path]) -> Path:
-    """Unique path for a new note, disambiguating collisions by author then number."""
-    candidates = [slugify(title)]
-    if surname := author_surname(author):
-        candidates.append(f"{slugify(title)}-{surname}")
-    for slug in candidates:
-        path = books_path / f"{slug}.md"
-        if path not in taken and not path.exists():
-            return path
-    base = candidates[-1]
+def _unique_path(books_path: Path, stem: str, taken: set[Path]) -> Path:
+    path = books_path / f"{stem}.md"
+    if path not in taken and not path.exists():
+        return path
     n = 2
     while True:
-        path = books_path / f"{base}-{n}.md"
+        path = books_path / f"{stem} ({n}).md"
         if path not in taken and not path.exists():
             return path
         n += 1
+
+
+def new_note_path(books_path: Path, title: str, author: str, taken: set[Path]) -> Path:
+    """Unique path for a new note, numbering '(2)' on collision."""
+    return _unique_path(books_path, book_filename(title, author), taken)
+
+
+def plan_renames(notes: list[BookNote], books_path: Path) -> list[tuple[Path, Path]]:
+    """Compute (old, new) paths to bring notes in line with book_filename().
+
+    Subtitles are dropped for cleaner names, but restored for a book whose
+    trimmed name would collide with another while its full title is unique.
+    Notes already correctly named are skipped (and reserved) so they aren't
+    displaced; genuine duplicate titles fall back to a numbered suffix.
+    """
+    titled = [n for n in notes if n.get("title")]
+    clean = {n.path: book_filename(n.get("title"), n.get("author") or "") for n in titled}
+    full = {n.path: book_filename(n.get("title"), n.get("author") or "", drop_subtitle=False) for n in titled}
+    clean_counts = Counter(clean.values())
+    full_counts = Counter(full.values())
+
+    desired = {}
+    for n in titled:
+        name = clean[n.path]
+        if clean_counts[name] > 1 and full_counts[full[n.path]] == 1:
+            name = full[n.path]  # the subtitle resolves the collision
+        desired[n.path] = name
+
+    taken = {n.path for n in titled if n.path.stem == desired[n.path]}
+    plans: list[tuple[Path, Path]] = []
+    for n in titled:
+        if n.path.stem == desired[n.path]:
+            continue
+        target = _unique_path(books_path, desired[n.path], taken)
+        taken.add(target)
+        plans.append((n.path, target))
+    return plans
 
 
 def write_note(path: Path, post: frontmatter.Post) -> None:

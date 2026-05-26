@@ -1,15 +1,18 @@
 import frontmatter
 
+from pathlib import Path
+
 from book_sync.notes import (
     BookNote,
     NoteIndex,
     author_surname,
+    book_filename,
     find_match,
     match_key,
     merge_fields,
     new_note_path,
     normalize_title,
-    slugify,
+    plan_renames,
 )
 
 
@@ -28,12 +31,61 @@ def test_match_key_combines_title_and_surname():
     assert match_key("Ancillary Justice", "Ann Leckie") == "ancillary justice|leckie"
 
 
-def test_slugify():
-    assert slugify("The Fifth Season: A Novel") == "fifth-season"
+def test_book_filename_forms():
+    # standalone: subtitle dropped, author appended
+    assert book_filename("The First 20 Hours: How to Learn Anything . . . Fast!", "Josh Kaufman") == \
+        "The First 20 Hours - Josh Kaufman"
+    # series tag -> "(Series N)", illegal '#'/':' removed
+    assert book_filename("Ancillary Justice (Imperial Radch, #1)", "Ann Leckie") == \
+        "Ancillary Justice (Imperial Radch 1) - Ann Leckie"
+    # same base title, different volume stays distinct
+    assert book_filename("The Mongoliad: Book One (Foreworld, #1)", "Neal Stephenson") == \
+        "The Mongoliad (Foreworld 1) - Neal Stephenson"
+    assert book_filename("The Mongoliad: Book Three (Foreworld, #3)", "Neal Stephenson") == \
+        "The Mongoliad (Foreworld 3) - Neal Stephenson"
+    # no author
+    assert book_filename("Project Hail Mary") == "Project Hail Mary"
 
 
-def _note(meta):
-    return BookNote(path=None, post=frontmatter.Post(content="", **meta))
+def _note(meta, path=None):
+    return BookNote(path=path, post=frontmatter.Post(content="", **meta))
+
+
+def test_plan_renames_restores_subtitle_on_collision(tmp_path):
+    # Two different books sharing a main title before ':' must keep their
+    # subtitles; a genuine duplicate (identical title) falls back to numbering.
+    notes = [
+        _note({"title": "Y: The Last Man, Vol. 1: Unmanned", "author": "Brian K. Vaughan"},
+              path=tmp_path / "y.md"),
+        _note({"title": "Y: The Last Man Omnibus", "author": "Brian K. Vaughan"},
+              path=tmp_path / "y-vaughan.md"),
+        _note({"title": "Abolish Silicon Valley: How to Liberate Technology", "author": "Wendy Liu"},
+              path=tmp_path / "abolish.md"),
+        _note({"title": "Abolish Silicon Valley: How to Liberate Technology", "author": "Wendy Liu"},
+              path=tmp_path / "abolish-liu.md"),
+    ]
+    new_names = {old.name: new.name for old, new in plan_renames(notes, tmp_path)}
+    # distinct books -> subtitles restored, both unique
+    assert new_names["y.md"] == "Y - The Last Man, Vol. 1 - Unmanned - Brian K. Vaughan.md"
+    assert new_names["y-vaughan.md"] == "Y - The Last Man Omnibus - Brian K. Vaughan.md"
+    # genuine dup -> full title identical, so stay clean + numbered
+    abolish = sorted(v for k, v in new_names.items() if k.startswith("abolish"))
+    assert abolish == ["Abolish Silicon Valley - Wendy Liu (2).md",
+                       "Abolish Silicon Valley - Wendy Liu.md"]
+
+
+def test_plan_renames_skips_correct_and_disambiguates(tmp_path):
+    notes = [
+        _note({"title": "Project Hail Mary", "author": "Andy Weir"},
+              path=tmp_path / "project-hail-mary.md"),
+        _note({"title": "Project Hail Mary", "author": "Andy Weir"},  # already correct
+              path=tmp_path / "Project Hail Mary - Andy Weir.md"),
+    ]
+    plans = {old.name: new.name for old, new in plan_renames(notes, tmp_path)}
+    # the correctly-named note is skipped; the slug one is renamed but must not
+    # collide with the reserved correct name -> gets a numbered suffix
+    assert "Project Hail Mary - Andy Weir.md" not in [old for old in plans]
+    assert plans["project-hail-mary.md"] == "Project Hail Mary - Andy Weir (2).md"
 
 
 def test_find_match_priority_and_fuzzy():
@@ -81,7 +133,6 @@ def test_merge_fields_union_for_lists():
 
 def test_new_note_path_disambiguates(tmp_path):
     p1 = new_note_path(tmp_path, "Ancillary Justice", "Ann Leckie", set())
-    assert p1.name == "ancillary-justice.md"
-    taken = {p1}
-    p2 = new_note_path(tmp_path, "Ancillary Justice", "Someone Else", taken)
-    assert p2.name == "ancillary-justice-else.md"
+    assert p1.name == "Ancillary Justice - Ann Leckie.md"
+    p2 = new_note_path(tmp_path, "Ancillary Justice", "Ann Leckie", {p1})
+    assert p2.name == "Ancillary Justice - Ann Leckie (2).md"
