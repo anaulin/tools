@@ -1,2 +1,5 @@
 # local, machine-specific config (vault path etc.) — copy from config.example.toml
 config.toml
+
+# personal data exports (Goodreads library, etc.)
+*.csv

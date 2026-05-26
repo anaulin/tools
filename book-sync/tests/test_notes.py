@@ -50,6 +50,19 @@ def test_find_match_priority_and_fuzzy():
     assert find_match(idx, title="Totally Different Book", author="Nobody", threshold=88) is None
 
 
+def test_find_match_title_disabled_keeps_series_volumes_distinct():
+    # Two series volumes share a normalized title key after subtitle stripping.
+    idx = NoteIndex()
+    idx.add(_note({"title": "The Mongoliad: Book One", "author": "Neal Stephenson", "gr_id": "1"}))
+    # A different volume, no shared identifier: must NOT match when title is off.
+    assert find_match(idx, title="The Mongoliad: Book Two", author="Neal Stephenson",
+                      match_title=False) is None
+    # gr_id still matches regardless.
+    assert find_match(idx, gr_id="1", match_title=False).get("gr_id") == "1"
+    # With title matching on, they collapse (the behavior we avoid for imports).
+    assert find_match(idx, title="The Mongoliad: Book Two", author="Neal Stephenson") is not None
+
+
 def test_merge_fields_is_fill_only():
     meta = {"status": "read", "rating": 5}
     changed = merge_fields(meta, {"status": "want", "rating": None, "isbn": "123"})

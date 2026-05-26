@@ -33,6 +33,7 @@ def upsert(
     body: str | None = None,
     union_keys: tuple[str, ...] = (),
     threshold: int = 88,
+    match_title: bool = True,
     dry_run: bool = False,
 ) -> UpsertResult:
     """Match an existing note and fill blanks, or create a new one.
@@ -47,6 +48,7 @@ def upsert(
         title=fields.get("title"),
         author=fields.get("author"),
         threshold=threshold,
+        match_title=match_title,
     )
 
     if match is not None:
@@ -64,6 +66,8 @@ def upsert(
     post = frontmatter.Post(content=body or "")
     merged = {**fields, **(create_only or {})}
     changed = merge_fields(post.metadata, merged, union_keys=union_keys)
+    if body:
+        changed.append("body")
     note = BookNote(path=path, post=post)
     idx.add(note)
     if not dry_run:

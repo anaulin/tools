@@ -16,6 +16,11 @@ def test_upsert_creates_then_fills_without_clobbering(tmp_path):
     note = frontmatter.loads((books / "2312.md").read_text())
     assert note["status"] == "read" and note["rating"] == 4
 
+    # a review becomes the note body and is reported as a change
+    r_body = upsert(idx, books, fields={"title": "Reviewed", "author": "A"}, body="great")
+    assert "body" in r_body.changed
+    assert frontmatter.loads((books / "reviewed.md").read_text()).content == "great"
+
     # re-running with a different status must NOT overwrite, but fills isbn
     idx2 = load_index(books)
     r2 = upsert(idx2, books, fields={"title": "2312", "author": "Kim Stanley Robinson",

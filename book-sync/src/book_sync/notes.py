@@ -98,13 +98,19 @@ def find_match(
     title: str | None = None,
     author: str | None = None,
     threshold: int = 88,
+    match_title: bool = True,
 ) -> BookNote | None:
-    """Match priority: gr_id -> isbn -> exact title+author key -> fuzzy fallback."""
+    """Match priority: gr_id -> isbn -> exact title+author key -> fuzzy fallback.
+
+    ``match_title=False`` restricts matching to the exact identifiers (gr_id,
+    isbn). Use it when the source is already deduplicated per book (a Goodreads
+    export): title matching would wrongly collapse same-titled series volumes.
+    """
     if gr_id and str(gr_id) in idx.by_gr_id:
         return idx.by_gr_id[str(gr_id)]
     if isbn and str(isbn) in idx.by_isbn:
         return idx.by_isbn[str(isbn)]
-    if not title:
+    if not title or not match_title:
         return None
     key = match_key(title, author or "")
     if key in idx.by_key:
