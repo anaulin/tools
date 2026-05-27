@@ -8,17 +8,28 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def wikilink(directory: str, name: str) -> str:
+    """Vault-relative Obsidian wikilink, e.g. ``[[Reference/books/Title - Author]]``.
+
+    The directory prefix is what keeps the link unambiguous: a book note and its
+    clipping almost always share a basename, so a bare ``[[name]]`` resolves to
+    whichever file is in the same folder (i.e. itself).
+    """
+    return f"[[{directory}/{name}]]"
+
+
 @dataclass
 class Clipping:
     path: Path
     title: str
     author: str
     category: str  # "books", "articles", ...
+    rel_dir: str = ""  # clipping's vault-relative folder, for building links
 
     @property
     def link(self) -> str:
-        """Obsidian wikilink to this clipping (filename without extension)."""
-        return f"[[{self.path.stem}]]"
+        """Vault-relative wikilink to this clipping."""
+        return wikilink(self.rel_dir, self.path.stem)
 
 
 def _meta_value(text: str, label: str) -> str:
@@ -30,7 +41,7 @@ def _meta_value(text: str, label: str) -> str:
     return val.lstrip("#").strip()
 
 
-def parse_clipping(path: Path) -> Clipping | None:
+def parse_clipping(path: Path, rel_dir: str = "") -> Clipping | None:
     text = path.read_text(encoding="utf-8", errors="replace")
     title = _meta_value(text, "Full Title")
     author = _meta_value(text, "Author")
@@ -41,12 +52,13 @@ def parse_clipping(path: Path) -> Clipping | None:
         title=title,
         author=author,
         category=_meta_value(text, "Category").lower(),
+        rel_dir=rel_dir,
     )
 
 
-def book_clippings(clippings_path: Path) -> Iterator[Clipping]:
+def book_clippings(clippings_path: Path, rel_dir: str = "") -> Iterator[Clipping]:
     for p in sorted(clippings_path.glob("*.md")):
-        c = parse_clipping(p)
+        c = parse_clipping(p, rel_dir)
         if c and c.category == "books":
             yield c
 
@@ -55,14 +67,14 @@ _BOOK_NOTE_LINE = re.compile(r"^- Book note: .*$", re.MULTILINE)
 _METADATA_HDR = re.compile(r"^\s*## Metadata\s*$", re.MULTILINE)
 
 
-def with_book_link(text: str, book_stem: str) -> tuple[str, bool]:
-    """Add/update a ``- Book note: [[stem]]`` line in the clipping's Metadata block.
+def with_book_link(text: str, book_dir: str, book_stem: str) -> tuple[str, bool]:
+    """Add/update a ``- Book note: [[dir/stem]]`` line in the clipping's Metadata block.
 
-    Idempotent: replaces an existing back-link (e.g. after a note rename) and
-    leaves the file untouched when it already points at ``book_stem``. Returns
-    the new text and whether anything changed.
+    Idempotent: replaces an existing back-link (e.g. after a note rename, or an
+    older bare-stem link) and leaves the file untouched when it already points at
+    the same target. Returns the new text and whether anything changed.
     """
-    line = f"- Book note: [[{book_stem}]]"
+    line = f"- Book note: {wikilink(book_dir, book_stem)}"
     if _BOOK_NOTE_LINE.search(text):
         new = _BOOK_NOTE_LINE.sub(line, text, count=1)
         return new, new != text
@@ -72,10 +84,10 @@ def with_book_link(text: str, book_stem: str) -> tuple[str, bool]:
     return f"{line}\n{text}", True  # no Metadata block: prepend
 
 
-def add_book_link(path: Path, book_stem: str) -> bool:
-    """Write a back-link to ``book_stem`` into the clipping file. Returns changed."""
+def add_book_link(path: Path, book_dir: str, book_stem: str) -> bool:
+    """Write a back-link to ``book_dir/book_stem`` into the clipping file. Returns changed."""
     text = path.read_text(encoding="utf-8", errors="replace")
-    new, changed = with_book_link(text, book_stem)
+    new, changed = with_book_link(text, book_dir, book_stem)
     if changed:
         path.write_text(new, encoding="utf-8")
     return changed

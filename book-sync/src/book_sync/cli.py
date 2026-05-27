@@ -88,7 +88,7 @@ def seed_clippings(
     idx = load_index(cfg.books_path)
     results = []
     backlinks = 0
-    for c in clippings_mod.book_clippings(cfg.clippings_path):
+    for c in clippings_mod.book_clippings(cfg.clippings_path, cfg.clippings_dir):
         res = upsert(
             idx,
             cfg.books_path,
@@ -102,7 +102,7 @@ def seed_clippings(
         if res.action == "skip":  # no book note to link back to
             continue
         # reverse link: clipping -> book note
-        if dry_run or clippings_mod.add_book_link(c.path, res.path.stem):
+        if dry_run or clippings_mod.add_book_link(c.path, cfg.books_dir, res.path.stem):
             backlinks += 1
     _report(results, dry_run)
     prefix = "[dry-run] would add" if dry_run else "added/updated"
@@ -123,7 +123,7 @@ def curate_clippings(
     linked = skipped = 0
     new_books = []
 
-    for c in clippings_mod.book_clippings(cfg.clippings_path):
+    for c in clippings_mod.book_clippings(cfg.clippings_path, cfg.clippings_dir):
         # already resolved by seed-clippings' normal matching -> nothing to curate
         if c.title and find_match(idx, title=c.title, author=c.author, threshold=cfg.fuzzy_threshold):
             continue
@@ -135,7 +135,7 @@ def curate_clippings(
             if not dry_run:
                 if "clipping" in merge_fields(v.note.meta, {"clipping": c.link}):
                     write_note(v.note.path, v.note.post)
-                clippings_mod.add_book_link(c.path, v.note.path.stem)
+                clippings_mod.add_book_link(c.path, cfg.books_dir, v.note.path.stem)
         elif v.action == "skip":
             skipped += 1
             typer.echo(f"  SKIP  {c.path.name}  ({v.reason})")
