@@ -63,7 +63,7 @@ def import_goodreads(
             fields=book.fields,
             body=book.body or None,
             threshold=cfg.fuzzy_threshold,
-            match_title=False,  # each Goodreads row is a distinct book (gr_id)
+            match_title=False,  # each Goodreads row is a distinct book (goodreads_id)
             dry_run=dry_run,
         )
         for book in goodreads_mod.parse_goodreads_csv(csv_path)

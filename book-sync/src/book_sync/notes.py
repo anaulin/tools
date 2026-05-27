@@ -96,7 +96,7 @@ class BookNote:
 @dataclass
 class NoteIndex:
     notes: list[BookNote] = field(default_factory=list)
-    by_gr_id: dict[str, BookNote] = field(default_factory=dict)
+    by_goodreads_id: dict[str, BookNote] = field(default_factory=dict)
     by_isbn: dict[str, BookNote] = field(default_factory=dict)
     by_key: dict[str, BookNote] = field(default_factory=dict)
     paths: set[Path] = field(default_factory=set)
@@ -104,8 +104,8 @@ class NoteIndex:
     def add(self, note: BookNote) -> None:
         self.notes.append(note)
         self.paths.add(note.path)
-        if gid := note.get("gr_id"):
-            self.by_gr_id[str(gid)] = note
+        if gid := note.get("goodreads_id"):
+            self.by_goodreads_id[str(gid)] = note
         if isbn := note.get("isbn"):
             self.by_isbn[str(isbn)] = note
         if title := note.get("title"):
@@ -128,21 +128,21 @@ def load_index(books_path: Path) -> NoteIndex:
 def find_match(
     idx: NoteIndex,
     *,
-    gr_id: str | None = None,
+    goodreads_id: str | None = None,
     isbn: str | None = None,
     title: str | None = None,
     author: str | None = None,
     threshold: int = 88,
     match_title: bool = True,
 ) -> BookNote | None:
-    """Match priority: gr_id -> isbn -> exact title+author key -> fuzzy fallback.
+    """Match priority: goodreads_id -> isbn -> exact title+author key -> fuzzy fallback.
 
-    ``match_title=False`` restricts matching to the exact identifiers (gr_id,
+    ``match_title=False`` restricts matching to the exact identifiers (goodreads_id,
     isbn). Use it when the source is already deduplicated per book (a Goodreads
     export): title matching would wrongly collapse same-titled series volumes.
     """
-    if gr_id and str(gr_id) in idx.by_gr_id:
-        return idx.by_gr_id[str(gr_id)]
+    if goodreads_id and str(goodreads_id) in idx.by_goodreads_id:
+        return idx.by_goodreads_id[str(goodreads_id)]
     if isbn and str(isbn) in idx.by_isbn:
         return idx.by_isbn[str(isbn)]
     if not title or not match_title:

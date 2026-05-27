@@ -20,5 +20,5 @@ data_file = "data/awards.json"
 
 [matching]
 # rapidfuzz token_sort_ratio threshold (0-100) for the title+author fuzzy
-# fallback, used only when there's no gr_id or ISBN match. Higher = stricter.
+# fallback, used only when there's no goodreads_id or ISBN match. Higher = stricter.
 fuzzy_threshold = 88

@@ -90,10 +90,10 @@ def test_plan_renames_skips_correct_and_disambiguates(tmp_path):
 
 def test_find_match_priority_and_fuzzy():
     idx = NoteIndex()
-    idx.add(_note({"title": "2312", "author": "Kim Stanley Robinson", "gr_id": "111", "isbn": "999"}))
+    idx.add(_note({"title": "2312", "author": "Kim Stanley Robinson", "goodreads_id": "111", "isbn": "999"}))
     idx.add(_note({"title": "Ancillary Justice", "author": "Ann Leckie"}))
 
-    assert find_match(idx, gr_id="111").get("title") == "2312"
+    assert find_match(idx, goodreads_id="111").get("title") == "2312"
     assert find_match(idx, isbn="999").get("title") == "2312"
     # fuzzy: slight title variation, same author still matches
     m = find_match(idx, title="Ancillary Justice: Imperial Radch", author="Leckie", threshold=80)
@@ -105,12 +105,12 @@ def test_find_match_priority_and_fuzzy():
 def test_find_match_title_disabled_keeps_series_volumes_distinct():
     # Two series volumes share a normalized title key after subtitle stripping.
     idx = NoteIndex()
-    idx.add(_note({"title": "The Mongoliad: Book One", "author": "Neal Stephenson", "gr_id": "1"}))
+    idx.add(_note({"title": "The Mongoliad: Book One", "author": "Neal Stephenson", "goodreads_id": "1"}))
     # A different volume, no shared identifier: must NOT match when title is off.
     assert find_match(idx, title="The Mongoliad: Book Two", author="Neal Stephenson",
                       match_title=False) is None
-    # gr_id still matches regardless.
-    assert find_match(idx, gr_id="1", match_title=False).get("gr_id") == "1"
+    # goodreads_id still matches regardless.
+    assert find_match(idx, goodreads_id="1", match_title=False).get("goodreads_id") == "1"
     # With title matching on, they collapse (the behavior we avoid for imports).
     assert find_match(idx, title="The Mongoliad: Book Two", author="Neal Stephenson") is not None
 
