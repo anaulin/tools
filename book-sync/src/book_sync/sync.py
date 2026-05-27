@@ -19,8 +19,8 @@ from .notes import (
 
 @dataclass
 class UpsertResult:
-    action: str  # "create" | "update" | "noop"
-    path: Path
+    action: str  # "create" | "update" | "noop" | "skip"
+    path: Path | None  # None only when action == "skip" (no match, create disabled)
     changed: list[str]
 
 
@@ -34,6 +34,7 @@ def upsert(
     union_keys: tuple[str, ...] = (),
     threshold: int = 88,
     match_title: bool = True,
+    create: bool = True,
     dry_run: bool = False,
 ) -> UpsertResult:
     """Match an existing note and fill blanks, or create a new one.
@@ -61,6 +62,9 @@ def upsert(
             idx.add(match)  # refresh lookup keys (e.g. newly filled goodreads_id/isbn)
         action = "update" if changed else "noop"
         return UpsertResult(action=action, path=match.path, changed=changed)
+
+    if not create:
+        return UpsertResult(action="skip", path=None, changed=[])
 
     path = new_note_path(books_path, fields["title"], fields.get("author", ""), idx.paths)
     post = frontmatter.Post(content=body or "")

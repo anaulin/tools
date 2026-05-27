@@ -36,15 +36,18 @@ def _load(config_path: Path) -> Config:
 def _report(results, dry_run: bool) -> None:
     counts = Counter(r.action for r in results)
     for r in results:
-        if r.action == "noop":
+        if r.action in ("noop", "skip"):
             continue
         mark = "+" if r.action == "create" else "~"
         typer.echo(f"  {mark} {r.path.name}  ({', '.join(r.changed)})")
     prefix = "[dry-run] would " if dry_run else ""
-    typer.echo(
+    summary = (
         f"{prefix}create {counts['create']}, update {counts['update']}, "
         f"unchanged {counts['noop']}"
     )
+    if counts["skip"]:
+        summary += f", skipped {counts['skip']} (no match)"
+    typer.echo(summary)
 
 
 @app.command("import-goodreads")
@@ -75,22 +78,34 @@ def import_goodreads(
 def seed_clippings(
     config: ConfigOpt = Path("config.toml"),
     dry_run: DryRunOpt = False,
+    no_create: Annotated[
+        bool, typer.Option("--no-create", help="Only link clippings that already have a book note; create nothing.")
+    ] = False,
 ) -> None:
-    """Link/create book notes from Readwise #books clippings."""
+    """Cross-link book notes and their Readwise #books clippings (both directions)."""
     cfg = _load(config)
     idx = load_index(cfg.books_path)
-    results = [
-        upsert(
+    results = []
+    backlinks = 0
+    for c in clippings_mod.book_clippings(cfg.clippings_path):
+        res = upsert(
             idx,
             cfg.books_path,
             fields={"title": c.title, "author": c.author, "clipping": c.link},
             create_only={"status": cfg.clipping_default_status},
             threshold=cfg.fuzzy_threshold,
+            create=not no_create,
             dry_run=dry_run,
         )
-        for c in clippings_mod.book_clippings(cfg.clippings_path)
-    ]
+        results.append(res)
+        if res.action == "skip":  # no book note to link back to
+            continue
+        # reverse link: clipping -> book note
+        if dry_run or clippings_mod.add_book_link(c.path, res.path.stem):
+            backlinks += 1
     _report(results, dry_run)
+    prefix = "[dry-run] would add" if dry_run else "added/updated"
+    typer.echo(f"{prefix} {backlinks} clipping back-links")
 
 
 @app.command("awards")
