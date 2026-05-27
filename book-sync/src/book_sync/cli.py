@@ -12,8 +12,9 @@ from . import awards as awards_mod
 from . import clippings as clippings_mod
 from . import goodreads as goodreads_mod
 from . import coalesce as coalesce_mod
+from . import curate as curate_mod
 from .config import Config, load_config
-from .notes import load_index, new_note_path, plan_renames, write_note
+from .notes import find_match, load_index, merge_fields, new_note_path, plan_renames, write_note
 from .sync import upsert
 
 app = typer.Typer(
@@ -106,6 +107,47 @@ def seed_clippings(
     _report(results, dry_run)
     prefix = "[dry-run] would add" if dry_run else "added/updated"
     typer.echo(f"{prefix} {backlinks} clipping back-links")
+
+
+@app.command("curate-clippings")
+def curate_clippings(
+    config: ConfigOpt = Path("config.toml"),
+    dry_run: DryRunOpt = False,
+    link_threshold: Annotated[
+        float, typer.Option(help="Title-only score to treat a clipping as an existing-note dupe (0-100).")
+    ] = curate_mod.LINK_THRESHOLD,
+) -> None:
+    """Triage clippings seed-clippings left unmatched: link dupes, skip junk, report new books."""
+    cfg = _load(config)
+    idx = load_index(cfg.books_path)
+    linked = skipped = 0
+    new_books = []
+
+    for c in clippings_mod.book_clippings(cfg.clippings_path):
+        # already resolved by seed-clippings' normal matching -> nothing to curate
+        if c.title and find_match(idx, title=c.title, author=c.author, threshold=cfg.fuzzy_threshold):
+            continue
+        v = curate_mod.classify(idx, c, link_threshold=link_threshold)
+
+        if v.action == "link":
+            linked += 1
+            typer.echo(f"  LINK  {c.path.name}  ->  {v.note.path.name}  (title {v.score:.0f})")
+            if not dry_run:
+                if "clipping" in merge_fields(v.note.meta, {"clipping": c.link}):
+                    write_note(v.note.path, v.note.post)
+                clippings_mod.add_book_link(c.path, v.note.path.stem)
+        elif v.action == "skip":
+            skipped += 1
+            typer.echo(f"  SKIP  {c.path.name}  ({v.reason})")
+        else:
+            new_books.append(c)
+
+    typer.echo(f"\n  NEW (no note, left for review): {len(new_books)}")
+    for c in sorted(new_books, key=lambda c: c.title.lower()):
+        typer.echo(f"    {c.title} - {c.author}")
+
+    prefix = "[dry-run] would " if dry_run else ""
+    typer.echo(f"\n{prefix}link {linked}, skip {skipped}, report {len(new_books)} new")
 
 
 @app.command("awards")
