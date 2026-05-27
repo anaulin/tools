@@ -44,6 +44,23 @@ def test_upsert_create_only_status(tmp_path):
     assert note["clipping"] == "[[Powers - Ursula K. Le Guin]]"
 
 
+def test_upsert_create_false_skips_unmatched(tmp_path):
+    books = tmp_path / "books"
+    idx = load_index(books)
+    # existing note gets linked...
+    upsert(idx, books, fields={"title": "Powers", "author": "Ursula K. Le Guin"})
+    idx = load_index(books)
+    r_match = upsert(idx, books, fields={"title": "Powers", "author": "Ursula K. Le Guin",
+                                         "clipping": "[[c]]"}, create=False)
+    assert r_match.action == "update"
+    # ...but an unmatched clipping creates nothing and reports a skip
+    r_skip = upsert(idx, books, fields={"title": "Unknown Book", "author": "Nobody",
+                                        "clipping": "[[c2]]"}, create=False)
+    assert r_skip.action == "skip"
+    assert r_skip.path is None
+    assert not list(books.glob("Unknown*.md"))
+
+
 def test_upsert_dry_run_writes_nothing(tmp_path):
     books = tmp_path / "books"
     idx = load_index(books)
