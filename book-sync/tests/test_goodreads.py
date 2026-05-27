@@ -15,7 +15,7 @@ CSV = dedent(
 def test_parse_maps_fields(tmp_path):
     csv_file = tmp_path / "gr.csv"
     csv_file.write_text(CSV, encoding="utf-8")
-    books = {b.fields["gr_id"]: b for b in parse_goodreads_csv(csv_file)}
+    books = {b.fields["goodreads_id"]: b for b in parse_goodreads_csv(csv_file)}
 
     a = books["111"]
     assert a.fields["title"] == "2312"

@@ -41,7 +41,7 @@ def _note(meta):
 def test_best_match_title_only():
     idx = NoteIndex()
     idx.add(_note({"title": "Daring Greatly: How the Courage to Be Vulnerable...",
-                   "author": "Brené Brown", "gr_id": "9"}))
+                   "author": "Brené Brown", "goodreads_id": "9"}))
     match, score = best_match(idx, "Daring Greatly")
     assert match is not None and score >= 85
 
@@ -49,9 +49,9 @@ def test_best_match_title_only():
 def test_build_merged_post_keeps_body_adds_frontmatter_and_review(tmp_path):
     free = tmp_path / "daring-greatly.md"
     free.write_text("# Daring Greatly\n\nmy handwritten notes", encoding="utf-8")
-    match = _note({"title": "Daring Greatly", "author": "Brené Brown", "gr_id": "9", "status": "read"})
+    match = _note({"title": "Daring Greatly", "author": "Brené Brown", "goodreads_id": "9", "status": "read"})
     post = build_merged_post(free, match)
-    assert post.metadata["gr_id"] == "9"  # authoritative frontmatter from import
+    assert post.metadata["goodreads_id"] == "9"  # authoritative frontmatter from import
     assert "my handwritten notes" in post.content  # human prose preserved
     assert "## Goodreads review" in post.content and "A Goodreads review." in post.content
 

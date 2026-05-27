@@ -58,7 +58,7 @@ def parse_goodreads_csv(path: Path) -> list[GoodreadsBook]:
                 "rating": rating or None,
                 "finished": _date(row.get("Date Read")),
                 "isbn": isbn,
-                "gr_id": (row.get("Book Id") or "").strip() or None,
+                "goodreads_id": (row.get("Book Id") or "").strip() or None,
                 "shelves": shelves or None,
             }
             books.append(GoodreadsBook(fields=fields, body=(row.get("My Review") or "").strip()))

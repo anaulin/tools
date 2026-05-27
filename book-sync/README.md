@@ -32,7 +32,7 @@ Recommended first run, in order (review each `--dry-run` before writing):
 1. **`import-goodreads <export.csv>`** — backfill from a Goodreads library
    export (Goodreads → *My Books* → *Import and export* → *Export Library*).
    Maps shelf→status, rating, date read, ISBN, shelves; review → note body;
-   keeps `Book Id` as `gr_id` for stable re-imports.
+   keeps `Book Id` as `goodreads_id` for stable re-imports.
 2. **`seed-clippings`** — for each Readwise `#books` clipping, link an existing
    note or create one. New clipping-only notes get `clippings.default_status`.
 3. **`awards`** — tag notes with Hugo/Nebula awards and create stubs (status
@@ -40,7 +40,7 @@ Recommended first run, in order (review each `--dry-run` before writing):
 
 ## Matching
 
-Books are matched across sources by, in priority: `gr_id` → `isbn` → exact
+Books are matched across sources by, in priority: `goodreads_id` → `isbn` → exact
 normalized `title`+author-surname → fuzzy `title`+author (rapidfuzz, threshold
 in `config.toml`). The fuzzy fallback is where mismatches hide — always
 `--dry-run` the first pass.

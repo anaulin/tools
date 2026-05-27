@@ -43,7 +43,7 @@ def upsert(
     """
     match = find_match(
         idx,
-        gr_id=fields.get("gr_id"),
+        goodreads_id=fields.get("goodreads_id"),
         isbn=fields.get("isbn"),
         title=fields.get("title"),
         author=fields.get("author"),
@@ -58,7 +58,7 @@ def upsert(
             changed.append("body")
         if changed and not dry_run:
             write_note(match.path, match.post)
-            idx.add(match)  # refresh lookup keys (e.g. newly filled gr_id/isbn)
+            idx.add(match)  # refresh lookup keys (e.g. newly filled goodreads_id/isbn)
         action = "update" if changed else "noop"
         return UpsertResult(action=action, path=match.path, changed=changed)
 

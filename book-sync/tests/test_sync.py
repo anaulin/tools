@@ -11,7 +11,7 @@ def test_upsert_creates_then_fills_without_clobbering(tmp_path):
 
     # create from goodreads
     r1 = upsert(idx, books, fields={"title": "2312", "author": "Kim Stanley Robinson",
-                                    "status": "read", "rating": 4, "gr_id": "111"})
+                                    "status": "read", "rating": 4, "goodreads_id": "111"})
     assert r1.action == "create"
     assert r1.path.name == "2312 - Kim Stanley Robinson.md"
     note = frontmatter.loads(r1.path.read_text())
@@ -25,7 +25,7 @@ def test_upsert_creates_then_fills_without_clobbering(tmp_path):
     # re-running with a different status must NOT overwrite, but fills isbn
     idx2 = load_index(books)
     r2 = upsert(idx2, books, fields={"title": "2312", "author": "Kim Stanley Robinson",
-                                     "status": "want", "isbn": "9780316098120", "gr_id": "111"})
+                                     "status": "want", "isbn": "9780316098120", "goodreads_id": "111"})
     assert r2.action == "update"
     note = frontmatter.loads(r1.path.read_text())
     assert note["status"] == "read"  # preserved (vault wins)
